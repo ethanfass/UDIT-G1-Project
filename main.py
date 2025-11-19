@@ -5,7 +5,7 @@ from google import genai
 from google.genai import types
 
 # Run the following line in powershell before running the code for the first time
-# set GEMINI_API_KEY = "AIzaSyCppkYuwHki_23FLvtg74MS282Y80UBWHU"
+# set GEMINI_API_KEY = Api Key
 # The client automatically picks up the GEMINI_API_KEY environment variable
 # No code change needed to use the secure method
 try:
