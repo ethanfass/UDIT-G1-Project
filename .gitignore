@@ -1,0 +1,5 @@
+__pycache__/
+.local_secrets/
+assessment_report.xlsx
+security_assessment_template_filled.xlsx
+~$*.xlsx

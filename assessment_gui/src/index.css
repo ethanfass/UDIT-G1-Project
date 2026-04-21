@@ -1,0 +1,36 @@
+@import url('https://fonts.googleapis.com/css2?family=Cardo:wght@400;700&family=Source+Sans+3:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #eef2f1;
+  --line: #c7d2d0;
+  --heading-ink: #1f2d2f;
+  --body-ink: #344245;
+  --muted: #657477;
+
+  --heading: 'Cardo', Georgia, serif;
+  --body: 'Source Sans 3', 'Segoe UI', sans-serif;
+
+  font-family: var(--body);
+  line-height: 1.45;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--body-ink);
+}

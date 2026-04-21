@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import os
 import argparse
 import json
 import textwrap
 from typing import List, Dict, Any
 
-import pandas as pd
-from google import genai
+pd = None
+genai = None
 
 
 
@@ -339,5 +341,8 @@ def main():
     )
 
 
+from assessment_runner_core import main as modern_main
+
+
 if __name__ == "__main__":
-    main()
+    modern_main()
