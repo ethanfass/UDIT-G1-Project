@@ -748,7 +748,16 @@ def build_questionnaire_assessment_prompt(
     rubric = build_rubric_prompt_text()
     response_contract = build_response_contract()
 
+    #HERE
+    # Move the 'Persona' and 'ISO Rubric' into a 'system_instruction' block during initialization
+    # Use the 'response_schema' in generation_config to enforce the JSON structure directly by
+    # Gemini's API
+    # This eliminates need for JSON repair functions from unexpected output
     return textwrap.dedent(
+        #HERE
+        # Implement 'Signposting' as explain in doc using Markdown headers
+        # This helps avoid recency bias and separates instructions and data
+
         f"""
         You are an ISO 27001 / ISO 27002 assessor performing a strict questionnaire-based security review for a smaller company.
 
@@ -783,6 +792,19 @@ def build_questionnaire_assessment_prompt(
         === EVIDENCE EXCERPTS ===
         {evidence_text}
         """
+        #HERE (in Additional rules section)
+        # Implement 'Chain of Thought' technique
+        # Break task into explicit steps
+        # Use numbers or bullet points to separate them
+
+        #HERE (near control_payload)
+        # Implement library or other method for examples
+        # Create function to put examples in the payload
+
+        #HERE (in Evidence Excerpts section)
+        # Use > character to wrap the evidenc text
+
+
     ).strip()
 
 
