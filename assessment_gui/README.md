@@ -1,16 +1,44 @@
-# React + Vite
+# Assessment GUI (React + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This folder contains the browser UI for submitting questionnaires, tracking assessment progress, and downloading generated Excel workbooks.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 18+
+- The FastAPI backend running from the repo root (`gui_api.py`)
 
-## React Compiler
+## Run locally
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+From this folder:
 
-## Expanding the ESLint configuration
+```bash
+npm install
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Development behavior:
+
+- The dev server proxies `/api` to `http://127.0.0.1:8000` (see `vite.config.js`).
+- The UI polls job status via `/api/jobs/{jobId}`.
+
+## Configure API base URL
+
+If you deploy the frontend separately from the backend, set the API base prefix:
+
+- `VITE_API_BASE` (example: `https://your-api.example.com`)
+
+In dev, you typically leave this unset and rely on the Vite proxy.
+
+## Build
+
+```bash
+npm run build
+```
+
+Static assets are emitted into `dist/`.
+
+## Lint
+
+```bash
+npm run lint
+```

@@ -1,6 +1,7 @@
 import argparse
 import getpass
 import json
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -57,12 +58,22 @@ def main() -> None:
             print("No local encrypted Gemini API key is configured.")
 
     if args.clear:
+        if not sys.platform.startswith("win"):
+            print(
+                "[INFO] Local encrypted key storage is only supported on Windows (DPAPI). Nothing to clear."
+            )
+            return
         if clear_local_api_key():
             print("Deleted the local encrypted Gemini API key.")
         else:
             print("No local encrypted Gemini API key was found.")
 
     if args.set:
+        if not sys.platform.startswith("win"):
+            raise SystemExit(
+                "Local encrypted key storage is only supported on Windows (DPAPI). "
+                "Set GEMINI_API_KEY/GOOGLE_API_KEY as environment variables instead."
+            )
         api_key = getpass.getpass("Enter Gemini API key: ").strip()
         if not api_key:
             raise SystemExit("No API key entered.")

@@ -2,6 +2,7 @@ import base64
 import ctypes
 import json
 import os
+import sys
 from ctypes import wintypes
 from pathlib import Path
 from typing import Optional, Tuple
@@ -12,6 +13,8 @@ SECRET_DIR = Path(__file__).resolve().parent / ".local_secrets"
 SECRET_PATH = SECRET_DIR / "gemini_api_key.json"
 DESCRIPTION = f"{APP_NAME} Gemini API Key"
 
+IS_WINDOWS = sys.platform.startswith("win")
+
 
 class DATA_BLOB(ctypes.Structure):
     _fields_ = [
@@ -20,8 +23,12 @@ class DATA_BLOB(ctypes.Structure):
     ]
 
 
-crypt32 = ctypes.windll.crypt32
-kernel32 = ctypes.windll.kernel32
+if IS_WINDOWS:
+    crypt32 = ctypes.windll.crypt32
+    kernel32 = ctypes.windll.kernel32
+else:
+    crypt32 = None
+    kernel32 = None
 
 
 def _blob_from_bytes(data: bytes) -> DATA_BLOB:
@@ -39,6 +46,11 @@ def _bytes_from_blob(blob: DATA_BLOB) -> bytes:
 
 
 def _protect_data(plaintext: str) -> str:
+    if not IS_WINDOWS:
+        raise OSError(
+            "Local encrypted key storage is only supported on Windows (DPAPI). "
+            "Set GEMINI_API_KEY/GOOGLE_API_KEY instead."
+        )
     input_blob = _blob_from_bytes(plaintext.encode("utf-8"))
     output_blob = DATA_BLOB()
     if not crypt32.CryptProtectData(
@@ -62,6 +74,11 @@ def _protect_data(plaintext: str) -> str:
 
 
 def _unprotect_data(ciphertext_b64: str) -> str:
+    if not IS_WINDOWS:
+        raise OSError(
+            "Local encrypted key storage is only supported on Windows (DPAPI). "
+            "Set GEMINI_API_KEY/GOOGLE_API_KEY instead."
+        )
     encrypted = base64.b64decode(ciphertext_b64.encode("ascii"))
     input_blob = _blob_from_bytes(encrypted)
     output_blob = DATA_BLOB()
@@ -86,6 +103,11 @@ def _unprotect_data(ciphertext_b64: str) -> str:
 
 
 def save_local_api_key(api_key: str) -> Path:
+    if not IS_WINDOWS:
+        raise OSError(
+            "Cannot save a local encrypted API key on this platform. "
+            "Set GEMINI_API_KEY/GOOGLE_API_KEY instead."
+        )
     api_key = api_key.strip()
     if not api_key:
         raise ValueError("API key cannot be empty.")
@@ -101,6 +123,8 @@ def save_local_api_key(api_key: str) -> Path:
 
 
 def load_local_api_key() -> Optional[str]:
+    if not IS_WINDOWS:
+        return None
     if not SECRET_PATH.exists():
         return None
 
@@ -112,6 +136,8 @@ def load_local_api_key() -> Optional[str]:
 
 
 def clear_local_api_key() -> bool:
+    if not IS_WINDOWS:
+        return False
     if SECRET_PATH.exists():
         SECRET_PATH.unlink()
         return True
@@ -119,7 +145,7 @@ def clear_local_api_key() -> bool:
 
 
 def local_api_key_exists() -> bool:
-    return SECRET_PATH.exists()
+    return IS_WINDOWS and SECRET_PATH.exists()
 
 
 def resolve_api_key() -> Optional[str]:

@@ -1,3 +1,12 @@
+"""Core ISO-style assessment engine.
+
+Provides a CLI entrypoint that:
+- loads ISO-aligned controls from a master template workbook,
+- selects relevant evidence from submitted questionnaires,
+- calls Gemini to assess maturity per control,
+- writes stakeholder-friendly Excel outputs.
+"""
+
 import argparse
 import ast
 import csv
@@ -17,6 +26,14 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from gemini_secret_store import resolve_api_key_with_source
+
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except Exception:
+    pass
 
 
 def bootstrap_openpyxl() -> None:
@@ -62,7 +79,7 @@ PRIORITY_DEFAULT = "Medium"
 ASSESSMENT_MODE_QUESTIONNAIRE = "questionnaire"
 ASSESSMENT_MODE_FORMAL_EVIDENCE = "formal_evidence"
 ASSESSMENT_MODE_LABELS = {
-    ASSESSMENT_MODE_QUESTIONNAIRE: "Strict Questionnaire Review",
+    ASSESSMENT_MODE_QUESTIONNAIRE: "Informal Questionnaire Review",
     ASSESSMENT_MODE_FORMAL_EVIDENCE: "Formal Evidence Review",
 }
 
@@ -716,6 +733,30 @@ def build_rubric_prompt_text() -> str:
     )
 
 
+def build_questionnaire_rubric_prompt_text() -> str:
+    return textwrap.dedent(
+        """
+        - Very Low: No relevant answer is present, the answer says the control is not performed, or the available answer contradicts the control.
+        - Low: The control is supported by a basic answer that suggests the practice exists, but with limited detail.
+        - Medium: The questionnaire gives a credible control description, policy/process name, scope, owner/team, tool, cadence, certification, implementation detail, or other relevant context that directly addresses the control.
+        - High: The answer is specific and confidence-building: it includes multiple relevant details, named tools or teams, review cadence, SOC/ISO/PCI/certification references, framework mappings, audit-report references, or consistent support across more than one questionnaire excerpt. Direct artifacts are helpful but not required in this mode.
+        - Very High: The evidence goes beyond normal questionnaire detail and shows metrics, recurring validation, oversight, continuous improvement, independent testing, or direct artifact references.
+        """
+    ).strip()
+
+
+def build_formal_rubric_prompt_text() -> str:
+    return textwrap.dedent(
+        """
+        - Very Low: No relevant evidence is present, the answer says the control is not performed, or the available answer contradicts the control.
+        - Low: Questionnaire evidence suggests the control exists, but the evidence is mostly attestation or has limited detail.
+        - Medium: The questionnaire evidence is specific, directly relevant, and supported by named policies, named tools, owners, review cadence, certifications, SOC/ISO/PCI references, audit references, or multiple consistent excerpts, even if primary artifacts are limited.
+        - High: Artifact-style evidence, strong audit/certification references, retained records, screenshots, logs, tickets, policy documents, system exports, or review records show the control is documented and likely operating.
+        - Very High: Strong artifact evidence also shows measurement, recurring validation, governance oversight, and continuous improvement.
+        """
+    ).strip()
+
+
 def build_response_contract() -> str:
     return textwrap.dedent(
         """
@@ -745,27 +786,33 @@ def build_questionnaire_assessment_prompt(
     evidence_text: str,
 ) -> str:
     control_payload = build_control_payload(controls)
-    rubric = build_rubric_prompt_text()
+    rubric = build_questionnaire_rubric_prompt_text()
     response_contract = build_response_contract()
 
     return textwrap.dedent(
         f"""
-        You are an ISO 27001 / ISO 27002 assessor performing a strict questionnaire-based security review for a smaller company.
+        You are an ISO 27001 / ISO 27002 advisor performing a practical, informal questionnaire review for a smaller company.
 
-        Assessment mode: Strict Questionnaire Review
+        Assessment mode: Informal Questionnaire Review
         Company: "{company_name}"
 
-        Evaluate each control using only the supplied questionnaire excerpts. Be strict, but calibrate for completed security questionnaires:
-        - Treat detailed questionnaire answers, named policies or processes, stated owners, review cadences, tool names, scoped control descriptions, certifications, audit-report references, and framework crosswalks as evidence when they directly answer the control.
-        - Do not give credit for generic "yes", "in place", marketing language, vague maturity claims, or answers that do not address the control.
-        - If an answer is only a bare self-attestation with no scope, cadence, owner, technical detail, or corroborating source, cap the control at Low.
-        - Medium requires a defined control with enough detail to understand how it works, but may still lack primary artifacts such as logs, tickets, screenshots, or registers.
-        - High requires specific, current, scoped, and consistent questionnaire evidence, preferably corroborated by certification, SOC/ISO/PCI references, crosswalks, named tools, or multiple independent excerpts. Missing primary artifacts should remain a gap.
-        - Very High requires evidence of measurement, recurring validation, oversight, continuous improvement, or direct artifact references. Do not award Very High for an ordinary questionnaire attestation alone.
-        - If evidence is conflicting, stale, implied, or incomplete, choose the lower reasonable level and explain why.
-        - Keep remediation actionable and realistic for a small or mid-sized business.
+        Your goal is to recognize maturity from vendor questionnaires and self-submitted security documentation. This is not a forensic audit. Score based on what the documents reasonably support, then mention missing artifacts as improvement opportunities.
 
-        Security level rubric:
+        Decision approach:
+        - Start by identifying the strongest relevant support for the control.
+        - Give full questionnaire-review credit for credible self-attested answers when they are specific, relevant, and consistent.
+        - Treat named policies, processes, owners, responsible teams, tools, review cadences, certifications, SOC/ISO/PCI references, framework mappings, audit-report references, scoped descriptions, and implementation details as strong positive evidence.
+        - Missing logs, screenshots, tickets, policy PDFs, or raw system exports should affect confidence or remediation, not the maturity level, when the questionnaire gives credible detail.
+        - Use Low for basic support that is relevant but thin.
+        - Use Medium generously for a plausible defined control with at least one concrete implementation detail.
+        - Use High for a credible mature control description with multiple concrete details, corroborating signals, certification references, or consistent support across excerpts.
+        - Use Very High sparingly for controls with measurement, recurring validation, governance oversight, continuous improvement, independent testing, or direct artifact references.
+        - If both Low and Medium seem defensible, choose Medium in this informal mode.
+        - If both Medium and High seem defensible, choose High in this informal mode and explain the remaining evidence gap in a constructive way.
+        - Do not treat questionnaire format as weak evidence by default. Treat it as the expected evidence source for this mode.
+        - Keep summaries fair, concise, and constructive rather than punitive.
+
+        Positive maturity rubric:
         {rubric}
 
         {response_contract}
@@ -773,8 +820,8 @@ def build_questionnaire_assessment_prompt(
         Additional rules:
         - Evaluate every control provided.
         - Do not invent evidence that is not in the excerpts.
-        - If the questionnaire evidence is enough for partial credit but primary proof is missing, state both facts clearly.
-        - Keep remediation steps short, concrete, and implementation-ready.
+        - Prefer "supported with artifact follow-up recommended" over "not evidenced" when the questionnaire gives relevant support.
+        - Keep remediation steps short, concrete, and implementation-ready, focused on strengthening proof rather than implying the control is absent.
         - Do not include markdown or any extra keys.
 
         === CONTROLS TO ASSESS ===
@@ -792,28 +839,31 @@ def build_formal_evidence_assessment_prompt(
     evidence_text: str,
 ) -> str:
     control_payload = build_control_payload(controls)
-    rubric = build_rubric_prompt_text()
+    rubric = build_formal_rubric_prompt_text()
     response_contract = build_response_contract()
 
     return textwrap.dedent(
         f"""
-        You are an ISO 27001 / ISO 27002 assessor performing a formal evidence sufficiency review for a smaller company.
+        You are an ISO 27001 / ISO 27002 advisor performing a formal evidence sufficiency review for a smaller company.
 
         Assessment mode: Formal Evidence Review
         Company: "{company_name}"
 
-        Evaluate each control using only the supplied evidence excerpts. This mode is stricter than questionnaire review:
-        - Treat questionnaire answers as pointers to evidence, not as full proof by themselves.
-        - Strong evidence includes policies, standards, procedures, assigned owners, retained records, review minutes, logs, tickets, screenshots, system exports, risk registers, audit reports, test results, diagrams, configuration evidence, or other artifacts showing the control operates.
-        - A bare self-attestation or generic "yes" answer should normally be Very Low or Low, even if it claims the control exists.
-        - Medium requires credible detail plus at least some artifact-like support or multiple consistent excerpts showing the control is defined and partially implemented.
-        - High requires documented, consistently implemented control evidence with credible oversight or review records. Do not award High solely because a questionnaire says the control exists.
-        - Very High requires measured operation, recurring validation, executive or governance oversight, and evidence of continuous improvement.
-        - Certifications and SOC/ISO/PCI references can corroborate evidence, but they do not automatically satisfy unrelated controls unless the excerpt directly supports that control.
-        - If requested artifacts are missing, stale, indirect, or not uploaded, identify the evidence gap and choose the lower reasonable level.
-        - Keep remediation actionable and realistic for a small or mid-sized business.
+        Your goal is to estimate formal evidence sufficiency from the supplied excerpts. This mode asks for stronger proof than informal questionnaire review, but it should still give meaningful credit for detailed questionnaires and compliance references.
 
-        Security level rubric:
+        Decision approach:
+        - Start by identifying the strongest relevant support for the control.
+        - Treat specific questionnaire answers as useful evidence of control design and partial evidence of operation, especially when they include named policies, tools, teams, scope, cadence, certifications, SOC/ISO/PCI references, audit references, or framework mappings.
+        - Treat policies, standards, procedures, records, logs, tickets, screenshots, system exports, risk registers, audit reports, test results, diagrams, and configuration evidence as stronger evidence of operating effectiveness.
+        - Use Low for thin questionnaire-only support.
+        - Use Medium for specific questionnaire support or compliance references that make the control design credible, even when direct artifacts are limited.
+        - Use High when direct artifact-style evidence or strong audit/certification references indicate the control is operating and reviewed.
+        - Use Very High for measured operation, recurring validation, governance oversight, and continuous improvement.
+        - Missing artifacts should be described as evidence follow-up, not as proof that the control does not exist.
+        - When deciding between adjacent levels, choose the more generous level if the evidence is specific, relevant, and internally consistent.
+        - Keep summaries fair, concise, and constructive rather than punitive.
+
+        Formal evidence maturity rubric:
         {rubric}
 
         {response_contract}
@@ -821,8 +871,8 @@ def build_formal_evidence_assessment_prompt(
         Additional rules:
         - Evaluate every control provided.
         - Do not invent evidence that is not in the excerpts.
-        - If evidence is missing, state that clearly in the summary and gaps.
-        - Keep remediation steps short, concrete, and implementation-ready.
+        - If direct artifact evidence is missing, state what follow-up artifact would strengthen the rating.
+        - Keep remediation steps short, concrete, and implementation-ready, focused on collecting or improving evidence where appropriate.
         - Do not include markdown or any extra keys.
 
         === CONTROLS TO ASSESS ===
@@ -916,9 +966,80 @@ def elevate_priority(priority: str, baseline: str, level_score: int) -> str:
     return chosen
 
 
+def evidence_strength_signal(answer_summary: str, evidence_used: Sequence[str], rationale: str) -> int:
+    combined = " ".join([answer_summary, rationale, *evidence_used]).lower()
+    if not combined or "no direct evidence" in combined:
+        return 0
+
+    signals = [
+        "policy",
+        "procedure",
+        "process",
+        "standard",
+        "owner",
+        "team",
+        "tool",
+        "platform",
+        "review",
+        "cadence",
+        "annual",
+        "quarterly",
+        "monthly",
+        "soc",
+        "iso",
+        "pci",
+        "certification",
+        "certified",
+        "audit",
+        "mfa",
+        "sso",
+        "encryption",
+        "monitor",
+        "logging",
+        "incident",
+        "risk",
+        "training",
+        "vendor",
+        "access",
+        "backup",
+    ]
+    return sum(1 for signal in signals if signal in combined)
+
+
+def calibrate_level_for_mode(
+    level: str,
+    answer_summary: str,
+    evidence_used: Sequence[str],
+    rationale: str,
+    assessment_mode: str,
+) -> str:
+    mode = normalize_assessment_mode(assessment_mode)
+    score = LEVEL_TO_SCORE[level]
+    strength = evidence_strength_signal(answer_summary, evidence_used, rationale)
+
+    if strength == 0:
+        return level
+
+    if mode == ASSESSMENT_MODE_QUESTIONNAIRE:
+        if score == 0:
+            return "Low"
+        if score == 1 and strength >= 1:
+            return "Medium"
+        if score == 2 and strength >= 3:
+            return "High"
+        return level
+
+    if score == 0:
+        return "Low"
+    if score == 1 and strength >= 3:
+        return "Medium"
+    return level
+
+
 def build_evaluations_from_response(
     controls: Sequence[Control],
     response_json: Dict[str, Any],
+    assessment_mode: str = ASSESSMENT_MODE_QUESTIONNAIRE,
 ) -> Dict[str, ControlEvaluation]:
     response_controls = response_json.get("controls", {})
     evaluations: Dict[str, ControlEvaluation] = {}
@@ -933,6 +1054,21 @@ def build_evaluations_from_response(
             raw.get("evidence_used"),
             fallback=["No direct evidence cited by the model."],
         )
+        rationale = collapse_whitespace(raw.get("rationale")) or "The assigned level reflects the strength and completeness of the available questionnaire evidence."
+        calibrated_level = calibrate_level_for_mode(
+            level,
+            answer_summary,
+            evidence_used,
+            rationale,
+            assessment_mode,
+        )
+        if calibrated_level != level:
+            rationale = (
+                f"{rationale} Calibrated to {calibrated_level} for "
+                f"{assessment_mode_label(assessment_mode)} because the response cited concrete supporting evidence."
+            )
+            level = calibrated_level
+            level_score = LEVEL_TO_SCORE[level]
         remediation_steps = normalize_text_list(
             raw.get("remediation_steps"),
             fallback=[
@@ -959,7 +1095,7 @@ def build_evaluations_from_response(
             remediation_steps=remediation_steps,
             priority=priority,
             confidence=normalize_confidence(raw.get("confidence")),
-            rationale=collapse_whitespace(raw.get("rationale")) or "The assigned level reflects the strength and completeness of the available questionnaire evidence.",
+            rationale=rationale,
         )
 
     return evaluations
@@ -1025,7 +1161,7 @@ def assess_control_batch(
     try:
         response_json = call_gemini_json(api_key, model_name, prompt)
         print(f"[INFO] Assessed controls {batch_start_index + 1}-{batch_end_index}")
-        return build_evaluations_from_response(batch_controls, response_json)
+        return build_evaluations_from_response(batch_controls, response_json, assessment_mode)
     except Exception as exc:
         if not is_json_response_error(exc):
             raise
@@ -1406,7 +1542,7 @@ def write_usage_sheet(workbook: Workbook, sheet_name: str = "Instructions") -> N
     instructions_sheet["A1"].font = Font(bold=True, size=14)
     instructions_sheet["A3"] = (
         "1. Start from the blank template, the standalone rubric, and the unfilled assessment report template.\n"
-        "2. Provide one or more vendor or self-submitted questionnaires to iso_assessment_runner.py.\n"
+        "2. Provide one or more vendor or self-submitted questionnaires to the CLI runner (assessment_runner_core.py).\n"
         "3. Review the filled template and assessment report together.\n"
         "4. Prioritize controls below the target level, especially Critical and High findings.\n"
         "5. Use the remediation guidance as a practical backlog for security improvement."
@@ -1768,7 +1904,7 @@ def main() -> None:
         "--assessment_mode",
         choices=sorted(ASSESSMENT_MODE_LABELS),
         default=ASSESSMENT_MODE_QUESTIONNAIRE,
-        help="Prompt mode to use: questionnaire for strict questionnaire review, formal_evidence for artifact-driven review.",
+        help="Prompt mode to use: questionnaire for informal questionnaire review, formal_evidence for artifact-driven review.",
     )
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument(

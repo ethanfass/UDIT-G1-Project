@@ -1,5 +1,11 @@
 __pycache__/
+.venv/
 .local_secrets/
+.env
+gui_jobs/
 assessment_report.xlsx
 security_assessment_template_filled.xlsx
+security_assessment_template.xlsx
+security_assessment_rubric.xlsx
+assessment_report_template.xlsx
 ~$*.xlsx

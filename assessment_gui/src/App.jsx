@@ -8,7 +8,7 @@ const assessmentModes = [
   {
     id: 'questionnaire',
     label: 'Questionnaire Review',
-    detail: 'Strict scoring from completed questionnaire answers, certifications, mappings, and stated processes.',
+    detail: 'Informal scoring from completed questionnaire answers, certifications, mappings, and stated processes.',
   },
   {
     id: 'formal_evidence',
@@ -160,7 +160,7 @@ function App() {
         <p className="eyebrow">Security Assessment Portal</p>
         <h1>ISO Evidence Review Workspace</h1>
         <p className="hero-copy">
-          Score submitted security documentation in either strict questionnaire mode or formal evidence mode,
+          Score submitted security documentation in either informal questionnaire mode or formal evidence mode,
           then export an ISO-style evidence sufficiency report.
         </p>
       </section>
@@ -266,7 +266,7 @@ function App() {
           <div className="results-head">
             <div>
               <h2>Assessment Results</h2>
-              <p>{result.assessment_mode_label || 'Strict Questionnaire Review'}</p>
+              <p>{result.assessment_mode_label || 'Informal Questionnaire Review'}</p>
             </div>
             <div className="actions">
               <button className="secondary-btn" onClick={() => openDownload(downloads?.assessment_report)}>

@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+"""FastAPI backend for the React GUI.
+
+This service accepts questionnaire uploads, runs the assessment in a background
+thread, exposes job progress, and provides download endpoints for generated
+Excel workbooks.
+"""
+
 import re
 import shutil
 import threading
@@ -25,6 +32,14 @@ from assessment_runner_core import (
     write_filled_template_workbook,
 )
 from gemini_secret_store import resolve_api_key_with_source
+
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except Exception:
+    pass
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -151,7 +166,7 @@ def run_assessment_job(
             top_chunks_per_control=4,
             max_evidence_chars=50000,
             assessment_mode=assessment_mode,
-            max_parallel_batches=4,
+            max_parallel_batches=8,
             progress_callback=progress_callback,
         )
 
